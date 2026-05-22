@@ -24,7 +24,12 @@ pub fn load(path: &str) -> std::io::Result<Header> {
     let path = Path::new(path);
     match path.extension() {
         Some(ext) if ext == "safetensors" => (),
-        _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "not a safetensors file")),
+        _ => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "not a safetensors file",
+            ));
+        }
     }
     let mut file = File::open(path)?;
 
@@ -35,8 +40,8 @@ pub fn load(path: &str) -> std::io::Result<Header> {
     let mut header_bytes = vec![0u8; header_len as usize];
     file.read_exact(&mut header_bytes)?;
 
-    let header: Header = serde_json::from_slice(&header_bytes)
-        .expect("invalid safetensors JSON header");
+    let header: Header =
+        serde_json::from_slice(&header_bytes).expect("invalid safetensors JSON header");
 
     let data_start = 8u64 + header_len;
 
@@ -49,7 +54,10 @@ pub fn load(path: &str) -> std::io::Result<Header> {
     file.read_exact(&mut buf)?;
 
     println!("tensors: {}", header.tensors.len());
-    println!("first: {name}  dtype={}  shape={:?}  bytes={}", info.dtype, info.shape, n_bytes);
+    println!(
+        "first: {name}  dtype={}  shape={:?}  bytes={}",
+        info.dtype, info.shape, n_bytes
+    );
     match header.metadata.as_ref().and_then(|m| m.keys().next()) {
         Some(k) => println!("metadata first key: {k}"),
         None => println!("metadata: <none>"),
