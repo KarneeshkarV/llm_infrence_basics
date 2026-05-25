@@ -45,6 +45,7 @@ impl Attention {
 
             let mut scores = q_head.dot(&k_head.t());
             scores /= (HEAD_DIM as f32).sqrt();
+            mask(&mut scores);
 
             for mut row in scores.rows_mut() {
                 let row_max = row.iter().copied().max_by(|a, b| a.total_cmp(b)).unwrap();
@@ -103,4 +104,14 @@ fn apply_rope(x: &Array2<f32>, rotary_dim: usize) -> Array2<f32> {
     }
 
     output
+}
+
+fn mask(scores: &mut Array2<f32>) {
+    for i in 0..scores.shape()[0] {
+        for j in 0..scores.shape()[1] {
+            if i < j {
+                scores[[i, j]] = -f32::INFINITY;
+            }
+        }
+    }
 }
