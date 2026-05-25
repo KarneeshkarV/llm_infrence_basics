@@ -2,10 +2,7 @@
 
 ## Necessary (needed for correct inference)
 
-- [ ] RoPE (Rotary Position Encoding) — not implemented. SmolLM2 uses RoPE applied to Q and K inside each head before the dot product.
-- [ ] Causal mask — token `i` currently attends to future tokens. Need to mask upper triangle of scores to `-inf` before softmax.
-- [ ] `lm_head` — final linear projection from hidden dim (576) to vocab size (49152) for next-token prediction.
-- [ ] Sampling — no greedy decode or token selection after logits. Nothing produces actual text yet.
+All done — the engine produces coherent text end to end.
 
 ## Improvements (correctness ok, but rough)
 
@@ -24,3 +21,10 @@
 - [x] Numerically stable softmax
 - [x] 30-layer loop in `NeuralNetwork`
 - [x] `TransformerBlock::from_weights` loads weights by name and removes from map
+- [x] RoPE applied to Q and K per head before the score dot product
+- [x] Causal mask — upper triangle set to `-inf` before softmax
+- [x] Final RMSNorm (`model.norm`) before `lm_head`
+- [x] `lm_head` — projection to vocab logits (reuses tied embedding weights)
+- [x] Greedy sampling — argmax over last-position logits
+- [x] `decode_tokens` — inverts vocab + byte-level encoding back to text
+- [x] Autoregressive generation loop with EOS stop

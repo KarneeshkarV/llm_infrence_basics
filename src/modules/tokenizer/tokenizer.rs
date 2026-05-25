@@ -287,6 +287,56 @@ pub fn tokenize_text(
     Ok(token_ids)
 }
 
+pub fn decode_tokens(
+    token_ids: &[usize],
+    tokenizer_file_path: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let tokenizer_json = std::fs::read_to_string(tokenizer_file_path)?;
+    let tokenizer_file: TokenizerFile = serde_json::from_str(&tokenizer_json)?;
+    let model = tokenizer_file.model.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "tokenizer file does not contain a BPE model",
+        )
+    })?;
+
+    // inverse of step 4: id -> token string (added tokens override vocab)
+    let mut id_to_token: HashMap<usize, String> = model
+        .vocab
+        .into_iter()
+        .map(|(token, id)| (id, token))
+        .collect();
+    for token in tokenizer_file.added_tokens {
+        id_to_token.insert(token.id, token.content);
+    }
+
+    // inverse of step 2: byte-level unicode char -> original byte
+    let byte_decoder: HashMap<char, u8> = bytes_to_unicode()
+        .into_iter()
+        .map(|(byte, ch)| (ch, byte))
+        .collect();
+
+    // ids -> token strings -> one byte-level-encoded string
+    let mut encoded = String::new();
+    for id in token_ids {
+        let token = id_to_token.get(id).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("token id missing from vocab: {id}"),
+            )
+        })?;
+        encoded.push_str(token);
+    }
+
+    // map each char back to its raw byte, then interpret the bytes as UTF-8
+    let bytes: Vec<u8> = encoded
+        .chars()
+        .filter_map(|ch| byte_decoder.get(&ch).copied())
+        .collect();
+
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::tokenize_text;

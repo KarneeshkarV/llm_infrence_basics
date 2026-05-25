@@ -1,6 +1,6 @@
 use ndarray::Array2;
 
-pub fn lm_head(x: Array2<f32>, trans: Array2<f32>) -> Array2<f32> {
+pub fn lm_head(x: Array2<f32>, trans: &Array2<f32>) -> Array2<f32> {
     x.dot(&trans.t())
 }
 

@@ -1,13 +1,15 @@
 use crate::modules::transformers::HIDDEN_SIZE;
 use crate::modules::transformers::block::TransformerBlock;
+use crate::modules::transformers::rms_norm::RmsNorm;
 
 pub struct NeuralNetwork {
     layers: Vec<TransformerBlock>,
+    final_norm: RmsNorm,
 }
 
 impl NeuralNetwork {
-    pub fn new(layers: Vec<TransformerBlock>) -> Self {
-        Self { layers }
+    pub fn new(layers: Vec<TransformerBlock>, final_norm: RmsNorm) -> Self {
+        Self { layers, final_norm }
     }
 
     pub fn forward(&self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
@@ -15,6 +17,6 @@ impl NeuralNetwork {
         for layer in self.layers.iter() {
             output = layer.forward(&output);
         }
-        output
+        self.final_norm.forward(&output)
     }
 }
