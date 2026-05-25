@@ -1,8 +1,9 @@
 pub mod attention;
 pub mod block;
 pub mod ffn;
-pub mod rms_norm;
+pub mod lm_head;
 pub mod model;
+pub mod rms_norm;
 
 pub const HIDDEN_SIZE: usize = 576;
 pub const HEAD_DIM: usize = 64;
