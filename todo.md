@@ -1,27 +1,26 @@
-# Shortcuts taken (things to fix later)
+# Todo
 
-## Weight Loading
-- [ ] `.bin` support — currently only handles `.safetensors` format
-- [ ] validate tensor dtype at load time (we trust whatever the file says)
+## Necessary (needed for correct inference)
 
-## Model Config
-- [ ] `.config` for attention heads — `HIDDEN_SIZE`, `HEAD_DIM`, `NUM_Q_HEADS`, `NUM_KV_HEADS` are hardcoded constants in `attention.rs` for SmolLM2-135M only. Should read from `config.json`.
+- [ ] RoPE (Rotary Position Encoding) — not implemented. SmolLM2 uses RoPE applied to Q and K inside each head before the dot product.
+- [ ] Causal mask — token `i` currently attends to future tokens. Need to mask upper triangle of scores to `-inf` before softmax.
+- [ ] `lm_head` — final linear projection from hidden dim (576) to vocab size (49152) for next-token prediction.
+- [ ] Sampling — no greedy decode or token selection after logits. Nothing produces actual text yet.
 
-## Attention
-- [ ] RoPE (Rotary Position Encoding) — not implemented at all. SmolLM2 uses RoPE applied to Q and K inside each head before the dot product.
-- [ ] Causal mask — no masking applied. Token `i` currently attends to future tokens, which is wrong for autoregressive generation. Need to mask upper triangle of scores to `-inf` before softmax.
-- [ ] KV cache — recomputing K and V for all tokens on every forward pass. Real inference caches past K/V and only computes new token.
+## Improvements (correctness ok, but rough)
 
-## Transformer Block
-- [ ] RMSNorm — no layer norm before attention or before FFN. SmolLM2 uses RMSNorm.
-- [ ] FFN (Feed-Forward Network) — not implemented. Each transformer block has attention + FFN + residuals.
-- [ ] Residual connections — attention output should be added back to input (`x = x + attn_out`), not returned raw.
-- [ ] 30 layers — only one attention block exists. Need a loop over all 30 transformer layers loading the right weights.
-
-## Inference
-- [ ] `lm_head` — final linear projection from hidden dim (576) to vocab size (49152) for next-token prediction. Not implemented.
-- [ ] Sampling — no temperature, top-k, top-p, greedy decode. Nothing after logits.
-- [ ] Proper return type — `forward()` returns `Vec<Vec<f32>>` instead of `Array2<f32>`. Makes chaining layers awkward.
-
-## Error Handling
+- [ ] Read model config from `config.json` — `HIDDEN_SIZE`, `HEAD_DIM`, `NUM_Q_HEADS`, `NUM_KV_HEADS`, `NUM_LAYERS` are all hardcoded constants. Should be loaded at startup.
+- [ ] Load all weights in one pass — currently `load()` builds a `BTreeMap<String, WeightTensor>` holding all tensors in memory, then `from_weights` removes them one by one. Could stream weights directly into blocks without the intermediate map.
+- [ ] KV cache — recomputing K and V for all tokens on every forward pass. Real inference caches past K/V and only appends the new token.
+- [ ] `.bin` support — currently only handles `.safetensors` format.
 - [ ] `unwrap()` calls in `attention.rs` forward pass — shape mismatches will panic with no useful message.
+
+## Done
+
+- [x] RMSNorm
+- [x] FFN with SwiGLU activation
+- [x] Residual connections
+- [x] GQA head splitting in attention
+- [x] Numerically stable softmax
+- [x] 30-layer loop in `NeuralNetwork`
+- [x] `TransformerBlock::from_weights` loads weights by name and removes from map
