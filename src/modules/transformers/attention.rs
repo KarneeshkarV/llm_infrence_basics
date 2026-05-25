@@ -22,9 +22,11 @@ impl Attention {
         let seq_len = x.len();
         let flat: Vec<f32> = x.iter().flatten().copied().collect();
         let input = Array2::from_shape_vec((seq_len, HIDDEN_SIZE), flat).unwrap();
-        let q = self.w_q.dot(&input.t()).t().to_owned();
-        let k = self.w_k.dot(&input.t()).t().to_owned();
+        let mut q = self.w_q.dot(&input.t()).t().to_owned();
+        let mut k = self.w_k.dot(&input.t()).t().to_owned();
         let v = self.w_v.dot(&input.t()).t().to_owned();
+        q = apply_rope(&q, HEAD_DIM);
+        k = apply_rope(&k, HEAD_DIM);
 
         let kv_group_size = NUM_Q_HEADS / NUM_KV_HEADS;
         let mut concatenated = Array2::<f32>::zeros((seq_len, HIDDEN_SIZE));
@@ -70,4 +72,35 @@ fn convert(input: WeightTensor) -> Array2<f32> {
     debug_assert_eq!(input.shape.len(), 2);
     debug_assert_eq!(input.shape.iter().product::<usize>(), input.data.len());
     Array2::from_shape_vec((input.shape[0], input.shape[1]), input.data).unwrap()
+}
+
+fn calculate_theta(position: usize, dim_pair: usize, d_model: usize) -> f32 {
+    let exponent = -2.0 * dim_pair as f32 / d_model as f32;
+    let base = 10000_f32.powf(exponent);
+
+    position as f32 * base
+}
+fn rotate(x: f32, y: f32, theta: f32) -> (f32, f32) {
+    let new_x = x * theta.cos() - y * theta.sin();
+    let new_y = x * theta.sin() + y * theta.cos();
+
+    (new_x, new_y)
+}
+fn apply_rope(x: &Array2<f32>, rotary_dim: usize) -> Array2<f32> {
+    let mut output = x.to_owned();
+    let num_heads = x.shape()[1] / rotary_dim;
+
+    for (pos, mut row) in output.rows_mut().into_iter().enumerate() {
+        for head in 0..num_heads {
+            let head_start = head * rotary_dim;
+            for i in (0..rotary_dim).step_by(2) {
+                let theta = calculate_theta(pos, i / 2, rotary_dim);
+                let (new_x, new_y) = rotate(row[head_start + i], row[head_start + i + 1], theta);
+                row[head_start + i] = new_x;
+                row[head_start + i + 1] = new_y;
+            }
+        }
+    }
+
+    output
 }
