@@ -1,10 +1,6 @@
 use crate::modules::loading_weights::read::WeightTensor;
+use crate::modules::transformers::{HEAD_DIM, HIDDEN_SIZE, NUM_KV_HEADS, NUM_Q_HEADS};
 use ndarray::{Array2, s};
-
-const HIDDEN_SIZE: usize = 576;
-const HEAD_DIM: usize = 64;
-const NUM_Q_HEADS: usize = 9;
-const NUM_KV_HEADS: usize = 3;
 
 pub struct Attention {
     w_q: Array2<f32>, // [576, 576]
@@ -22,7 +18,7 @@ impl Attention {
             w_o: convert(o),
         }
     }
-    pub fn forward(&self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<Vec<f32>> {
+    pub fn forward(&self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
         let seq_len = x.len();
         let flat: Vec<f32> = x.iter().flatten().copied().collect();
         let input = Array2::from_shape_vec((seq_len, HIDDEN_SIZE), flat).unwrap();
@@ -62,10 +58,16 @@ impl Attention {
         }
 
         let output = self.w_o.dot(&concatenated.t()).t().to_owned();
-        output.rows().into_iter().map(|row| row.to_vec()).collect()
+        output
+            .rows()
+            .into_iter()
+            .map(|row| std::array::from_fn(|index| row[index]))
+            .collect()
     }
 }
 
 fn convert(input: WeightTensor) -> Array2<f32> {
+    debug_assert_eq!(input.shape.len(), 2);
+    debug_assert_eq!(input.shape.iter().product::<usize>(), input.data.len());
     Array2::from_shape_vec((input.shape[0], input.shape[1]), input.data).unwrap()
 }
