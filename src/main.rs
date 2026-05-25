@@ -25,6 +25,10 @@ fn main() -> std::io::Result<()> {
     println!("input: {:?}", tokenized_text);
     let _embeddings = embeddings::get_embeddings(tokenized_text, &embed);
     //println!("embeddings: {:?}", embeddings);
+    let q = &model["model.layers.0.self_attn.q_proj.weight"];
+    println!("q shape: {:?}", q.shape);
+    let k = &model["model.layers.0.self_attn.k_proj.weight"];
+    println!("k shape: {:?}", k.shape);
 
     Ok(())
 }
