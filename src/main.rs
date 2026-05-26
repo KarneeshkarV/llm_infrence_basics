@@ -31,7 +31,7 @@ fn main() -> std::io::Result<()> {
         "model.embed_tokens.weight",
     )?;
     let tokenizer_path = "models/SmolLM2-135M/tokenizer.json";
-    let input = "Hello, world! Karneeshkar";
+    let input = "Write a code to print Hello World";
     let mut token_ids = tokenizer::tokenize_text(input, tokenizer_path).unwrap();
 
     // lm_head is tied to the embedding matrix; clone it once so `embed` stays
@@ -60,7 +60,7 @@ fn main() -> std::io::Result<()> {
         .unwrap();
 
         let logits = lm_head::lm_head(output, &lm_head_weights);
-        let next_token = lm_head::greedy(&logits);
+        let next_token = lm_head::top_n(&logits, 0.5, 5);
 
         if next_token == eos_id {
             break;

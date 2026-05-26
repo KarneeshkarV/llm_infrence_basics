@@ -21,7 +21,7 @@ pub struct TensorInfo {
 #[derive(Debug, Deserialize)]
 pub struct Header {
     #[serde(rename = "__metadata__", default)]
-    pub metadata: Option<BTreeMap<String, String>>,
+    pub _metadata: Option<BTreeMap<String, String>>,
     #[serde(flatten)]
     pub tensors: BTreeMap<String, TensorInfo>,
 }
