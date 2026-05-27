@@ -50,7 +50,7 @@ impl TransformerBlock {
         ))
     }
 
-    pub fn forward(&self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
+    pub fn forward(&mut self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
         let normed_input = self.input_layernorm.forward(x);
         let attn_output = self.self_attn.forward(&normed_input);
         let attn_residual = add_residual(x, &attn_output);

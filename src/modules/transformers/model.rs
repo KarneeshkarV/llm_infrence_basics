@@ -12,9 +12,9 @@ impl NeuralNetwork {
         Self { layers, final_norm }
     }
 
-    pub fn forward(&self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
+    pub fn forward(&mut self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
         let mut output = x.to_vec();
-        for layer in self.layers.iter() {
+        for layer in self.layers.iter_mut() {
             output = layer.forward(&output);
         }
         self.final_norm.forward(&output)

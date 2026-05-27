@@ -24,7 +24,7 @@ fn main() -> std::io::Result<()> {
             "missing tensor: model.norm.weight",
         )
     })?);
-    let block = NeuralNetwork::new(temp_vec, final_norm);
+    let mut block = NeuralNetwork::new(temp_vec, final_norm);
 
     let embed = read::load_tensor_from_path(
         "models/SmolLM2-135M/model.safetensors",
@@ -32,21 +32,21 @@ fn main() -> std::io::Result<()> {
     )?;
     let tokenizer_path = "models/SmolLM2-135M/tokenizer.json";
     let input = "the code to print hellow world in python is";
-    let mut token_ids = tokenizer::tokenize_text(input, tokenizer_path).unwrap();
+    let token_ids = tokenizer::tokenize_text(input, tokenizer_path).unwrap();
 
-    // lm_head is tied to the embedding matrix; clone it once so `embed` stays
-    // available for the per-step embedding lookup inside the loop.
     let lm_head_weights =
         Array2::from_shape_vec((embed.shape[0], embed.shape[1]), embed.data.clone()).unwrap();
 
-    let max_new_tokens = 30;
+    let max_new_tokens = 100;
     let eos_id = 0;
 
     print!("{input}");
     std::io::stdout().flush().unwrap();
 
+    let mut step_input = token_ids;
+
     for _ in 0..max_new_tokens {
-        let embeddings = embeddings::get_embeddings(token_ids.clone(), &embed);
+        let embeddings = embeddings::get_embeddings(step_input.clone(), &embed);
         let hidden_states: Vec<[f32; HIDDEN_SIZE]> = embeddings
             .into_iter()
             .map(|embedding| embedding.try_into().unwrap())
@@ -65,11 +65,12 @@ fn main() -> std::io::Result<()> {
         if next_token == eos_id {
             break;
         }
-        token_ids.push(next_token);
 
         let piece = tokenizer::decode_tokens(&[next_token], tokenizer_path).unwrap();
         print!("{piece}");
         std::io::stdout().flush().unwrap();
+
+        step_input = vec![next_token];
     }
     println!();
 

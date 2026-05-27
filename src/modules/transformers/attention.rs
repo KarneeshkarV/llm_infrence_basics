@@ -1,12 +1,17 @@
 use crate::modules::loading_weights::read::WeightTensor;
 use crate::modules::transformers::{HEAD_DIM, HIDDEN_SIZE, NUM_KV_HEADS, NUM_Q_HEADS};
-use ndarray::{Array2, s};
+use ndarray::{Array2, Axis, concatenate, s};
 
 pub struct Attention {
     w_q: Array2<f32>, // [576, 576]
     w_k: Array2<f32>, // [192, 576]
     w_v: Array2<f32>, // [192, 576]
     w_o: Array2<f32>, // [576, 576]
+    cache: Option<Cache>,
+}
+pub struct Cache {
+    k: Array2<f32>, 
+    v: Array2<f32>, 
 }
 
 impl Attention {
@@ -16,17 +21,32 @@ impl Attention {
             w_k: convert(k),
             w_v: convert(v),
             w_o: convert(o),
+            cache: None,
         }
     }
-    pub fn forward(&self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
+    pub fn forward(&mut self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
         let seq_len = x.len();
         let flat: Vec<f32> = x.iter().flatten().copied().collect();
         let input = Array2::from_shape_vec((seq_len, HIDDEN_SIZE), flat).unwrap();
-        let mut q = self.w_q.dot(&input.t()).t().to_owned();
-        let mut k = self.w_k.dot(&input.t()).t().to_owned();
-        let v = self.w_v.dot(&input.t()).t().to_owned();
-        q = apply_rope(&q, HEAD_DIM);
-        k = apply_rope(&k, HEAD_DIM);
+        let past_len = self.cache.as_ref().map_or(0, |c| c.k.nrows());
+
+        let q = self.w_q.dot(&input.t()).t().to_owned();
+        let mut k_new = self.w_k.dot(&input.t()).t().to_owned();
+        let v_new = self.w_v.dot(&input.t()).t().to_owned();
+        let q = apply_rope(&q, HEAD_DIM, past_len);
+        k_new = apply_rope(&k_new, HEAD_DIM, past_len);
+
+        let (k, v) = match self.cache.take() {
+            Some(c) => (
+                concatenate(Axis(0), &[c.k.view(), k_new.view()]).unwrap(),
+                concatenate(Axis(0), &[c.v.view(), v_new.view()]).unwrap(),
+            ),
+            None => (k_new, v_new),
+        };
+        self.cache = Some(Cache {
+            k: k.clone(),
+            v: v.clone(),
+        });
 
         let kv_group_size = NUM_Q_HEADS / NUM_KV_HEADS;
         let mut concatenated = Array2::<f32>::zeros((seq_len, HIDDEN_SIZE));
@@ -45,7 +65,7 @@ impl Attention {
 
             let mut scores = q_head.dot(&k_head.t());
             scores /= (HEAD_DIM as f32).sqrt();
-            mask(&mut scores);
+            mask(&mut scores, past_len);
 
             for mut row in scores.rows_mut() {
                 let row_max = row.iter().copied().max_by(|a, b| a.total_cmp(b)).unwrap();
@@ -87,16 +107,17 @@ fn rotate(x: f32, y: f32, theta: f32) -> (f32, f32) {
 
     (new_x, new_y)
 }
-fn apply_rope(x: &Array2<f32>, rotary_dim: usize) -> Array2<f32> {
+fn apply_rope(x: &Array2<f32>, rotary_dim: usize, position_offset: usize) -> Array2<f32> {
     let mut output = x.to_owned();
     let num_heads = x.shape()[1] / rotary_dim;
     let half = rotary_dim / 2;
 
     for (pos, mut row) in output.rows_mut().into_iter().enumerate() {
+        let abs_pos = pos + position_offset;
         for head in 0..num_heads {
             let head_start = head * rotary_dim;
             for j in 0..half {
-                let theta = calculate_theta(pos, j, rotary_dim);
+                let theta = calculate_theta(abs_pos, j, rotary_dim);
                 let x = row[head_start + j];
                 let y = row[head_start + j + half];
                 let (new_x, new_y) = rotate(x, y, theta);
@@ -109,10 +130,14 @@ fn apply_rope(x: &Array2<f32>, rotary_dim: usize) -> Array2<f32> {
     output
 }
 
-fn mask(scores: &mut Array2<f32>) {
+// Query row `i` sits at absolute position `i + offset`; key column `j` sits at
+// absolute position `j`. A query may attend only to keys at or before it, so we
+// mask `j > i + offset`. On prefill (offset 0) this is the usual `j > i`; on a
+// single-token decode step nothing is masked.
+fn mask(scores: &mut Array2<f32>, offset: usize) {
     for i in 0..scores.shape()[0] {
         for j in 0..scores.shape()[1] {
-            if i < j {
+            if j > i + offset {
                 scores[[i, j]] = -f32::INFINITY;
             }
         }
