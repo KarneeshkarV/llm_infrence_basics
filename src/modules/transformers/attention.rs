@@ -77,7 +77,7 @@ fn convert(input: WeightTensor) -> Array2<f32> {
 
 fn calculate_theta(position: usize, dim_pair: usize, d_model: usize) -> f32 {
     let exponent = -2.0 * dim_pair as f32 / d_model as f32;
-    let base = 10000_f32.powf(exponent);
+    let base = 100000_f32.powf(exponent);
 
     position as f32 * base
 }
@@ -90,15 +90,18 @@ fn rotate(x: f32, y: f32, theta: f32) -> (f32, f32) {
 fn apply_rope(x: &Array2<f32>, rotary_dim: usize) -> Array2<f32> {
     let mut output = x.to_owned();
     let num_heads = x.shape()[1] / rotary_dim;
+    let half = rotary_dim / 2;
 
     for (pos, mut row) in output.rows_mut().into_iter().enumerate() {
         for head in 0..num_heads {
             let head_start = head * rotary_dim;
-            for i in (0..rotary_dim).step_by(2) {
-                let theta = calculate_theta(pos, i / 2, rotary_dim);
-                let (new_x, new_y) = rotate(row[head_start + i], row[head_start + i + 1], theta);
-                row[head_start + i] = new_x;
-                row[head_start + i + 1] = new_y;
+            for j in 0..half {
+                let theta = calculate_theta(pos, j, rotary_dim);
+                let x = row[head_start + j];
+                let y = row[head_start + j + half];
+                let (new_x, new_y) = rotate(x, y, theta);
+                row[head_start + j] = new_x;
+                row[head_start + j + half] = new_y;
             }
         }
     }

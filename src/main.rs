@@ -31,7 +31,7 @@ fn main() -> std::io::Result<()> {
         "model.embed_tokens.weight",
     )?;
     let tokenizer_path = "models/SmolLM2-135M/tokenizer.json";
-    let input = "Write a code to print Hello World";
+    let input = "the code to print hellow world in python is";
     let mut token_ids = tokenizer::tokenize_text(input, tokenizer_path).unwrap();
 
     // lm_head is tied to the embedding matrix; clone it once so `embed` stays
