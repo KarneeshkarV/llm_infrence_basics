@@ -1,6 +1,6 @@
 use crate::modules::loading_weights::read::WeightTensor;
 use crate::modules::transformers::{HEAD_DIM, HIDDEN_SIZE, NUM_KV_HEADS, NUM_Q_HEADS};
-use ndarray::{Array2, Axis, concatenate, s};
+use ndarray::{Array2, ArrayView2, s};
 
 pub struct Attention {
     w_q: Array2<f32>, // [576, 576]
@@ -10,8 +10,8 @@ pub struct Attention {
     cache: Option<Cache>,
 }
 pub struct Cache {
-    k: Array2<f32>, 
-    v: Array2<f32>, 
+    k: Vec<f32>,
+    v: Vec<f32>,
 }
 
 impl Attention {
@@ -28,25 +28,24 @@ impl Attention {
         let seq_len = x.len();
         let flat: Vec<f32> = x.iter().flatten().copied().collect();
         let input = Array2::from_shape_vec((seq_len, HIDDEN_SIZE), flat).unwrap();
-        let past_len = self.cache.as_ref().map_or(0, |c| c.k.nrows());
+        let kv_width = NUM_KV_HEADS * HEAD_DIM;
+        let past_len = self.cache.as_ref().map_or(0, |c| c.k.len() / kv_width);
 
         let q = self.w_q.dot(&input.t()).t().to_owned();
         let mut k_new = self.w_k.dot(&input.t()).t().to_owned();
         let v_new = self.w_v.dot(&input.t()).t().to_owned();
         let q = apply_rope(&q, HEAD_DIM, past_len);
         k_new = apply_rope(&k_new, HEAD_DIM, past_len);
-
-        let (k, v) = match self.cache.take() {
-            Some(c) => (
-                concatenate(Axis(0), &[c.k.view(), k_new.view()]).unwrap(),
-                concatenate(Axis(0), &[c.v.view(), v_new.view()]).unwrap(),
-            ),
-            None => (k_new, v_new),
-        };
-        self.cache = Some(Cache {
-            k: k.clone(),
-            v: v.clone(),
+        let cache = self.cache.get_or_insert_with(|| Cache {
+            k: Vec::new(),
+            v: Vec::new(),
         });
+        cache.k.extend(k_new.iter().copied());
+        cache.v.extend(v_new.iter().copied());
+
+        let kv_len = cache.k.len() / kv_width;
+        let k = ArrayView2::from_shape((kv_len, kv_width), cache.k.as_slice()).unwrap();
+        let v = ArrayView2::from_shape((kv_len, kv_width), cache.v.as_slice()).unwrap();
 
         let kv_group_size = NUM_Q_HEADS / NUM_KV_HEADS;
         let mut concatenated = Array2::<f32>::zeros((seq_len, HIDDEN_SIZE));
@@ -130,10 +129,6 @@ fn apply_rope(x: &Array2<f32>, rotary_dim: usize, position_offset: usize) -> Arr
     output
 }
 
-// Query row `i` sits at absolute position `i + offset`; key column `j` sits at
-// absolute position `j`. A query may attend only to keys at or before it, so we
-// mask `j > i + offset`. On prefill (offset 0) this is the usual `j > i`; on a
-// single-token decode step nothing is masked.
 fn mask(scores: &mut Array2<f32>, offset: usize) {
     for i in 0..scores.shape()[0] {
         for j in 0..scores.shape()[1] {
