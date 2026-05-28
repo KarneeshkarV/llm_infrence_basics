@@ -6,10 +6,14 @@ All done — the engine produces coherent text end to end.
 
 ## Improvements (correctness ok, but rough)
 
-- [ ] Read model config from `config.json` — `HIDDEN_SIZE`, `HEAD_DIM`, `NUM_Q_HEADS`, `NUM_KV_HEADS`, `NUM_LAYERS` are all hardcoded constants. Should be loaded at startup.
+- [x] Read model config from `config.json` — `HIDDEN_SIZE`, `HEAD_DIM`, `NUM_Q_HEADS`, `NUM_KV_HEADS`, `NUM_LAYERS` are all hardcoded constants. Should be loaded at startup.
 - [ ] Load all weights in one pass — currently `load()` builds a `BTreeMap<String, WeightTensor>` holding all tensors in memory, then `from_weights` removes them one by one. Could stream weights directly into blocks without the intermediate map.
 - [ ] `.bin` support — currently only handles `.safetensors` format.
 - [ ] `unwrap()` calls in `attention.rs` forward pass — shape mismatches will panic with no useful message.
+
+## Future
+
+- [ ] GPU acceleration via raw CUDA kernels (`cudarc`) — write matrix multiply and attention kernels from scratch; swap compute inside module boundaries without changing structure.
 
 ## Done
 

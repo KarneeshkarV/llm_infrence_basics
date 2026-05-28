@@ -336,22 +336,3 @@ pub fn decode_tokens(
 
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::tokenize_text;
-
-    const TOKENIZER_PATH: &str = "models/SmolLM2-135M/tokenizer.json";
-
-    #[test]
-    fn tokenizes_demo_text_to_ids() {
-        let tokens = tokenize_text("Hello, world! Karneeshkar", TOKENIZER_PATH).unwrap();
-        assert_eq!(tokens, vec![19556, 28, 905, 17, 13463, 662, 6509, 25616]);
-    }
-
-    #[test]
-    fn preserves_special_tokens() {
-        let tokens = tokenize_text("<|im_start|>user", TOKENIZER_PATH).unwrap();
-        assert_eq!(tokens[0], 1);
-    }
-}

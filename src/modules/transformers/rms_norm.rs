@@ -1,27 +1,55 @@
+use crate::modules::loading_weights::helper::invalid_data;
 use crate::modules::loading_weights::read::WeightTensor;
-use crate::modules::transformers::{HIDDEN_SIZE, RMS_NORM_EPS};
+use crate::modules::transformers::config::ModelConfig;
 
 pub struct RmsNorm {
-    weight: [f32; HIDDEN_SIZE],
+    weight: Vec<f32>,
+    hidden_size: usize,
+    eps: f32,
 }
 
 impl RmsNorm {
-    pub fn new(weight: WeightTensor) -> Self {
-        debug_assert_eq!(weight.shape, vec![HIDDEN_SIZE]);
-
-        Self {
-            weight: weight.data.try_into().unwrap(),
+    pub fn new(weight: WeightTensor, config: &ModelConfig) -> std::io::Result<Self> {
+        if weight.shape != vec![config.hidden_size] {
+            return Err(invalid_data(format!(
+                "RMSNorm weight shape {:?}, expected [{:?}]",
+                weight.shape, config.hidden_size
+            )));
         }
+
+        Ok(Self {
+            weight: weight.data,
+            hidden_size: config.hidden_size,
+            eps: config.rms_norm_eps,
+        })
     }
 
-    pub fn forward(&self, x: &[[f32; HIDDEN_SIZE]]) -> Vec<[f32; HIDDEN_SIZE]> {
-        x.iter().map(|token| self.forward_token(token)).collect()
+    pub fn forward(&self, x: &[f32], seq_len: usize) -> std::io::Result<Vec<f32>> {
+        if x.len() != seq_len * self.hidden_size {
+            return Err(invalid_data(format!(
+                "RMSNorm input has {} values, expected {} for seq_len {seq_len} and hidden_size {}",
+                x.len(),
+                seq_len * self.hidden_size,
+                self.hidden_size
+            )));
+        }
+
+        let mut output = Vec::with_capacity(x.len());
+        for token in x.chunks_exact(self.hidden_size) {
+            output.extend(self.forward_token(token));
+        }
+
+        Ok(output)
     }
 
-    fn forward_token(&self, x: &[f32; HIDDEN_SIZE]) -> [f32; HIDDEN_SIZE] {
-        let mean_square = x.iter().map(|value| value * value).sum::<f32>() / HIDDEN_SIZE as f32;
-        let scale = (mean_square + RMS_NORM_EPS).sqrt();
+    fn forward_token(&self, x: &[f32]) -> Vec<f32> {
+        let mean_square =
+            x.iter().map(|value| value * value).sum::<f32>() / self.hidden_size as f32;
+        let scale = (mean_square + self.eps).sqrt();
 
-        std::array::from_fn(|index| (x[index] / scale) * self.weight[index])
+        x.iter()
+            .zip(&self.weight)
+            .map(|(value, weight)| (value / scale) * weight)
+            .collect()
     }
 }
