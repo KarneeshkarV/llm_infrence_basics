@@ -13,13 +13,21 @@ use ndarray::Array2;
 use std::io::Write;
 
 fn main() -> std::io::Result<()> {
+    #[cfg(feature = "cuda")]
+    let use_gpu = modules::runtime::config::has_gpu();
+
+    #[cfg(not(feature = "cuda"))]
+    let use_gpu = false;
+
     let model_dir = "models/SmolLM2-135M";
     let config_path = format!("{model_dir}/config.json");
     let weights_path = format!("{model_dir}/model.safetensors");
     let tokenizer_path = format!("{model_dir}/tokenizer.json");
 
-    let config = ModelConfig::load(config_path)?;
     let mut model = read::load(&weights_path)?;
+    println!("{:?}", use_gpu);
+
+    let config = ModelConfig::load(config_path)?;
 
     let mut temp_vec = vec![];
     for i in 0..config.num_hidden_layers {

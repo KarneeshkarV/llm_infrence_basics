@@ -3,7 +3,11 @@ name = "llm_infrence_basics"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+cuda = ["cudarc"]
+
 [dependencies]
+cudarc = { version = "0.19.7", optional = true }
 ndarray = "0.17.2"
 rand = "0.10.1"
 serde = { version = "1", features = ["derive"] }
