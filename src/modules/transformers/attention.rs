@@ -104,7 +104,15 @@ impl Attention {
             mask(&mut scores, past_len);
 
             for mut row in scores.rows_mut() {
-                let row_max = row.iter().copied().max_by(|a, b| a.total_cmp(b)).unwrap();
+                let row_max = row
+                    .iter()
+                    .copied()
+                    .max_by(|a, b| a.total_cmp(b))
+                    .ok_or_else(|| {
+                        invalid_data(format!(
+                            "attention softmax row is empty for q_head {q_head} (seq_len={seq_len}, kv_len={kv_len})"
+                        ))
+                    })?;
                 row.mapv_inplace(|x| (x - row_max).exp());
                 let row_sum = row.sum();
                 row.mapv_inplace(|x| x / row_sum);
